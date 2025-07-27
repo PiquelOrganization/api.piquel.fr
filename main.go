@@ -7,11 +7,13 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/piquel-fr/api/handlers"
+	"github.com/piquel-fr/api/models"
 	"github.com/piquel-fr/api/services/auth"
 	"github.com/piquel-fr/api/services/config"
 	"github.com/piquel-fr/api/services/database"
+	"github.com/piquel-fr/api/services/docs"
+	gh "github.com/piquel-fr/api/services/github"
 	"github.com/piquel-fr/api/services/middleware"
-	"github.com/piquel-fr/api/types"
 )
 
 func main() {
@@ -19,11 +21,17 @@ func main() {
 
 	// Intialize services
 	config.LoadConfig()
+	gh.InitGithubWrapper()
 	auth.InitAuthentication()
 	auth.InitCookieStore()
 	database.InitDatabase()
 	defer database.DeinitDatabase()
-	types.Init()
+
+	if err := docs.InitDocumentation(); err != nil {
+		panic(err)
+	}
+
+	models.Init()
 
 	// Initialize the router
 	router := mux.NewRouter()
@@ -38,6 +46,14 @@ func main() {
 	router.HandleFunc("/auth/logout", handlers.HandleLogout).Methods(http.MethodGet, http.MethodOptions)
 	router.HandleFunc("/auth/{provider}", handlers.HandleProviderLogin).Methods(http.MethodGet, http.MethodOptions)
 	router.HandleFunc("/auth/{provider}/callback", handlers.HandleAuthCallback).Methods(http.MethodGet, http.MethodOptions)
+
+	router.HandleFunc("/docs/new", handlers.HandleNewDocs).Methods(http.MethodPost, http.MethodOptions)
+	router.HandleFunc("/docs/list", handlers.HandleListDocs).Methods(http.MethodGet, http.MethodOptions)
+	router.HandleFunc("/docs/list/{username}", handlers.HandleListDocs).Methods(http.MethodGet, http.MethodOptions)
+	router.HandleFunc("/docs/{documentation}/update", handlers.HandleUpdateDocs).Methods(http.MethodPut, http.MethodOptions)
+	router.HandleFunc("/docs/{documentation}/transfer/{username}", handlers.HandleTransferDocs).Methods(http.MethodPut, http.MethodOptions)
+	router.HandleFunc("/docs/{documentation}/delete", handlers.HandleDeleteDocs).Methods(http.MethodPut, http.MethodOptions)
+	router.PathPrefix("/docs/{documentation}").HandlerFunc(handlers.HandleDocs).Methods(http.MethodGet, http.MethodOptions)
 
 	address := fmt.Sprintf("0.0.0.0:%s", config.Envs.Port)
 
